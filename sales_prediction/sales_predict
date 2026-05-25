@@ -1,1 +1,135 @@
 
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+try:
+    df = pd.read_csv('ad.csv')
+    print("Dataset loaded successfully!")
+    print(f"Shape: {df.shape}")
+    print(f"\nFirst 5 rows:\n{df.head()}")
+except FileNotFoundError:
+    print("Error: 'advertising.csv' not found. Place it in the same folder.")
+    exit()
+print(f"\nDataset Info:")
+print(df.info())
+print(f"\nStatistics:\n{df.describe().round(2)}")
+print(f"\nMissing Values:\n{df.isnull().sum()}")
+plt.figure(figsize=(7, 4))
+sns.histplot(df['Sales'], bins=20, kde=True, color='coral')
+plt.title("Distribution of Sales")
+plt.xlabel("Sales (in thousands)")
+plt.ylabel("Count")
+plt.tight_layout()
+plt.savefig("sales_distribution.png")
+plt.show()
+print("Chart saved: sales_distribution.png")
+plt.figure(figsize=(7, 5))
+sns.heatmap(df.corr(), annot=True, cmap='coolwarm', fmt='.2f', linewidths=0.5)
+plt.title("Correlation Between Advertising Channels & Sales")
+plt.tight_layout()
+plt.savefig("correlation_heatmap.png")
+plt.show()
+print("Chart saved: correlation_heatmap.png")
+fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+channels = ['TV', 'Radio', 'Newspaper']
+colors   = ['steelblue', 'mediumseagreen', 'tomato']
+
+for i, (channel, color) in enumerate(zip(channels, colors)):
+    axes[i].scatter(df[channel], df['Sales'], alpha=0.5, color=color, edgecolors='white')
+    m, b = np.polyfit(df[channel], df['Sales'], 1)
+    axes[i].plot(df[channel], m * df[channel] + b, color='black', linewidth=1.5)
+    axes[i].set_title(f"{channel} Spend vs Sales")
+    axes[i].set_xlabel(f"{channel} Budget ($)")
+    axes[i].set_ylabel("Sales (thousands)")
+
+plt.suptitle("Advertising Channel Spend vs Sales", fontsize=14)
+plt.tight_layout()
+plt.savefig("spend_vs_sales.png")
+plt.show()
+print("Chart saved: spend_vs_sales.png")
+plt.figure(figsize=(7, 4))
+df[['TV', 'Radio', 'Newspaper']].plot(kind='box', patch_artist=True,
+    color=dict(boxes='steelblue', whiskers='gray', medians='red', caps='gray'))
+plt.title("Budget Spread Across Advertising Channels")
+plt.ylabel("Budget ($)")
+plt.tight_layout()
+plt.savefig("channel_boxplot.png")
+plt.show()
+print("Chart saved: channel_boxplot.png")
+X = df[['TV', 'Radio', 'Newspaper']]
+y = df['Sales']
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42)
+print(f"\nTraining samples: {len(X_train)} | Test samples: {len(X_test)}")
+lr = LinearRegression()
+lr.fit(X_train, y_train)
+lr_preds = lr.predict(X_test)
+lr_mae   = mean_absolute_error(y_test, lr_preds)
+lr_rmse  = np.sqrt(mean_squared_error(y_test, lr_preds))
+lr_r2    = r2_score(y_test, lr_preds)
+
+print(f"\n── Linear Regression ─────────────────────────────")
+print(f"MAE  : {lr_mae:.2f}")
+print(f"RMSE : {lr_rmse:.2f}")
+print(f"R²   : {lr_r2:.2f}")
+print(f"\nCoefficients:")
+for feature, coef in zip(['TV', 'Radio', 'Newspaper'], lr.coef_):
+    print(f"  {feature:<12} → {coef:.4f}")
+rf = RandomForestRegressor(n_estimators=100, random_state=42)
+rf.fit(X_train, y_train)
+rf_preds = rf.predict(X_test)
+rf_mae   = mean_absolute_error(y_test, rf_preds)
+rf_rmse  = np.sqrt(mean_squared_error(y_test, rf_preds))
+rf_r2    = r2_score(y_test, rf_preds)
+
+print(f"\n── Random Forest ─────────────────────────────────")
+print(f"MAE  : {rf_mae:.2f}")
+print(f"RMSE : {rf_rmse:.2f}")
+print(f"R²   : {rf_r2:.2f}")
+print(f"\n── Model Comparison ──────────────────────────────")
+print(f"{'Model':<25} {'MAE':>6} {'RMSE':>7} {'R²':>6}")
+print(f"{'-'*46}")
+print(f"{'Linear Regression':<25} {lr_mae:>6.2f} {lr_rmse:>7.2f} {lr_r2:>6.2f}")
+print(f"{'Random Forest':<25} {rf_mae:>6.2f} {rf_rmse:>7.2f} {rf_r2:>6.2f}")
+fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+for ax, preds, name, color in zip(
+        axes,
+        [lr_preds, rf_preds],
+        ['Linear Regression', 'Random Forest'],
+        ['steelblue', 'mediumseagreen']):
+    ax.scatter(y_test, preds, alpha=0.6, color=color, edgecolors='white')
+    ax.plot([y_test.min(), y_test.max()],
+            [y_test.min(), y_test.max()], 'r--', linewidth=2)
+    ax.set_title(f"Actual vs Predicted — {name}")
+    ax.set_xlabel("Actual Sales")
+    ax.set_ylabel("Predicted Sales")
+
+plt.tight_layout()
+plt.savefig("actual_vs_predicted.png")
+plt.show()
+print("Chart saved: actual_vs_predicted.png")
+importances = pd.Series(rf.feature_importances_,
+                        index=['TV', 'Radio', 'Newspaper']).sort_values(ascending=False)
+plt.figure(figsize=(7, 4))
+colors = ['#4CAF50', '#2196F3', '#FF5722']
+plt.bar(importances.index, importances.values, color=colors, edgecolor='white')
+plt.title("Feature Importance — Which Channel Drives Sales?")
+plt.ylabel("Importance Score")
+for i, v in enumerate(importances.values):
+    plt.text(i, v + 0.005, f"{v:.3f}", ha='center', fontweight='bold')
+plt.tight_layout()
+plt.savefig("feature_importance.png")
+plt.show()
+print("Chart saved: feature_importance.png")
+print("\n── Custom Budget Prediction ──────────────────────")
+custom = pd.DataFrame([[230.1, 37.8, 69.2]], columns=['TV', 'Radio', 'Newspaper'])
+lr_custom = lr.predict(custom)[0]
+rf_custom = rf.predict(custom)[0]
+print(f"Budget → TV: $230.1K | Radio: $37.8K | Newspaper: $69.2K")
+print(f"Linear Regression Predicted Sales : {lr_custom:.2f}K units")
+print(f"Random Forest Predicted Sales     : {rf_custom:.2f}K units")
